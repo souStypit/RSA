@@ -2,55 +2,75 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <gmp.h>
+#include <math.h>
 #include <time.h>
 
-#define BITSIZE 8
+#define SIZE 8192
 
-/*
-    В result записывается простое число по его порядковому номеру
-*/
-int generateRandomPrimeNumber(mpz_t *result, mpz_t index) {
-    mpz_init(*result);
-    mpz_set_ui(*result, 0);
-
-    if (mpz_cmp_ui(index, 0) <= 0) {
-        return 1;
-    }
-
-    while (mpz_cmp(*result, index) <= 0) {
-        mpz_nextprime(*result, *result);
-    }
-
-    return 0;
-}
-
-int main() {
-    int res;
-    mpz_t indexP, p, eulerP, indexQ, q, eulerQ, n, euler, e, d, i, cmpEResult, mulResult, modResult;
-    mpz_inits(indexP, p, eulerP, indexQ, q, eulerQ, n, euler, e, d, i, cmpEResult, mulResult, modResult, NULL);
-
-    // RANDOM VARS
+void generateRandomPrimeNumber(mpz_t result, int bitsAmount) {
     gmp_randstate_t rstate;
-    unsigned long int seed = time(NULL);
+    unsigned long int seed = clock();
 
     gmp_randinit_default(rstate);
     gmp_randseed_ui(rstate, seed);
-    mpz_urandomb(indexP, rstate, BITSIZE);
-    mpz_urandomb(indexQ, rstate, BITSIZE);
 
-    // p
-    res = generateRandomPrimeNumber(&p, indexP);
-    if (res) {
-        printf("Error: generating prime number.\n");
-        exit(1);
+    mpz_urandomb(result, rstate, bitsAmount);
+    mpz_nextprime(result, result);
+
+    gmp_randclear(rstate);
+}
+
+void encrypt(mpz_t e, mpz_t n, char message[SIZE], FILE *stream) {
+    int r[SIZE];
+    mpz_t messageToInt, encryptedMessage;
+    mpz_inits(messageToInt, encryptedMessage, NULL);
+
+    for (int i = 0; message[i] != '\0'; i++) {
+        r[i] = (int)message[i];
+        mpz_set_ui(messageToInt, r[i]);
+        mpz_powm(encryptedMessage, messageToInt, e, n);
+        gmp_fprintf(stream, "%Zd\n", encryptedMessage);
     }
 
-    // q
-    res = generateRandomPrimeNumber(&q, indexQ);
-    if (res) {
-        printf("Error: generating prime number.\n");
-        exit(1);
+    mpz_clears(messageToInt, encryptedMessage, NULL);
+}
+
+void decrypt(mpz_t d, mpz_t n, char (*resultPtr)[SIZE], FILE *stream) {
+    char *res = *resultPtr;
+    char buffer[SIZE];
+    mpz_t encryptedMessage, decryptedMessage;
+    mpz_inits(encryptedMessage, decryptedMessage, NULL);
+
+    for (int i = 0; !feof(stream); i++) {
+        if (fgets(buffer, SIZE, stream) == NULL) break;
+        
+        mpz_set_str(encryptedMessage, buffer, 10);
+
+        mpz_powm(decryptedMessage, encryptedMessage, d, n);
+        res[i] = (char)mpz_get_ui(decryptedMessage);
     }
+
+    mpz_clears(encryptedMessage, decryptedMessage, NULL);
+}
+
+int main() {
+    int bitsAmount, power;
+    char message[SIZE], decryptedMessage[SIZE];
+    mpz_t p, eulerP, q, eulerQ, n, euler, e, d, i;
+    mpz_t messageToInt, encryptedMessage;
+    FILE *encryption = fopen("result.txt", "w"), *decryption = fopen("result.txt", "r");
+
+    printf("Введите степень 2 (от 10 до 16): ");
+    scanf("%d", &power);
+    if (power > 16 || power < 10) exit(1);
+    
+    mpz_inits(p, eulerP, q, eulerQ, n, euler, e, d, i, NULL);
+    mpz_inits(messageToInt, encryptedMessage, decryptedMessage, NULL);
+
+    bitsAmount = pow(2, power);
+
+    generateRandomPrimeNumber(p, bitsAmount / 2);
+    generateRandomPrimeNumber(q, bitsAmount / 2);
 
     // n
     mpz_mul(n, p, q);
@@ -60,65 +80,32 @@ int main() {
     mpz_sub_ui(eulerQ, q, 1);
     mpz_mul(euler, eulerP, eulerQ);
 
-    // opened key "e"
-    for (mpz_set_ui(i, 2); mpz_cmp(i, euler) < 0; mpz_add_ui(i, i, 1)) {
-        mpz_gcd(cmpEResult, i, euler);
+    //generating opened key
+    generateRandomPrimeNumber(e, bitsAmount);
 
-        if (mpz_cmp_ui(cmpEResult, 1) == 0) {
-            mpz_set(e, i);
-            break;
-        }
-    }
-
-    // closed key "d"
-    for (mpz_set_ui(i, 2); mpz_cmp(i, euler) < 0; mpz_add_ui(i, i, 1)) {
-        mpz_mul(mulResult, e, i);
-        mpz_mod(modResult, mulResult, euler);
-
-        if (mpz_cmp_ui(modResult, 1) == 0) {
-            mpz_set(d, i);            
-            break;
-        }
-    }
+    //generating closed key
+    mpz_invert(d, e, euler);
 
     gmp_printf("p = %Zd\n", p);
-    gmp_printf("random index = %Zd\n", indexP);
-
     gmp_printf("q = %Zd\n", q);
-    gmp_printf("random index = %Zd\n", indexQ);
-
     gmp_printf("n = %Zd\n", n);
     gmp_printf("euler = %Zd\n", euler);
-    gmp_printf("opened key: e = %Zd n = %Zd\n", e, n);
-    gmp_printf("closed key: d = %Zd n = %Zd\n\n", d, n);
+    gmp_printf("открытый ключ:\ne = %Zd\nn = %Zd\n", e, n);
+    gmp_printf("закрытый ключ:\nd = %Zd\nn = %Zd\n", d, n);
 
-    char ch = 'A', ch_dec;
-    mpz_t encryptedMessage, decryptedMessage;
-    mpz_set_ui(encryptedMessage, 1);
-    mpz_set_ui(decryptedMessage, 1);
+    //RSA algorithm
+    printf("\nВведите сообщение: ");
+    scanf("%s", message);
 
-    for (mpz_set_ui(i, 0); mpz_cmp(i, e) < 0; mpz_add_ui(i, i, 1)) {
-        mpz_mul_ui(mulResult, encryptedMessage, ch);
-        mpz_mod(modResult, mulResult, n);
-        mpz_set(encryptedMessage, mulResult);
-        // encryptedMessage = (encryptedMessage * ch) % n;
-    }
+    encrypt(e, n, message, encryption);
+    fclose(encryption);
 
-    for (mpz_set_ui(i, 0); mpz_cmp(i, d) < 0; mpz_add_ui(i, i, 1)) {
-        mpz_mul(mulResult, decryptedMessage, encryptedMessage);
-        mpz_mod(modResult, mulResult, n);
-        mpz_set(decryptedMessage, mulResult);
-        // decryptedMessage = (decryptedMessage * encryptedMessage) % n;
-    }
+    decrypt(d, n, &decryptedMessage, decryption);
+    fclose(decryption);
+    
+    printf("Расшифрованное сообщение: %s\n", decryptedMessage);
 
-    ch_dec = mpz_get_ui(decryptedMessage);
+    mpz_clears(p, eulerP, q, eulerQ, n, euler, e, d, i, NULL);
 
-    printf("encrypted message = %c ", ch);
-    gmp_printf("%Zd\n", encryptedMessage);
-    printf("decrypted message = %c\n", ch_dec);
-
-    mpz_clears(indexP, p, eulerP, indexQ, q, eulerQ, n, euler, e, d, i, cmpEResult, mulResult, modResult, NULL);
-    gmp_randclear(rstate);
-
-    exit(0);
+    return 0;
 }

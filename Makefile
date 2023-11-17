@@ -3,7 +3,7 @@ CC = gcc
 CRUNFILE = ./app
 
 all: clean
-	$(CC) $(CFLAGS) main.c -o $(CRUNFILE) -lgmp
+	$(CC) $(CFLAGS) main.c -o $(CRUNFILE) -lgmp -lm
 
 run:
 	$(CRUNFILE)
