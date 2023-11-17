@@ -20,7 +20,8 @@ void generateRandomPrimeNumber(mpz_t result, int bitsAmount) {
     gmp_randclear(rstate);
 }
 
-void encrypt(mpz_t e, mpz_t n, char message[SIZE], FILE *stream) {
+void encrypt(mpz_t e, mpz_t n, char message[SIZE]) {
+    FILE *stream = fopen("result.txt", "w");
     int r[SIZE];
     mpz_t messageToInt, encryptedMessage;
     mpz_inits(messageToInt, encryptedMessage, NULL);
@@ -33,9 +34,11 @@ void encrypt(mpz_t e, mpz_t n, char message[SIZE], FILE *stream) {
     }
 
     mpz_clears(messageToInt, encryptedMessage, NULL);
+    fclose(stream);
 }
 
-void decrypt(mpz_t d, mpz_t n, char (*resultPtr)[SIZE], FILE *stream) {
+void decrypt(mpz_t d, mpz_t n, char (*resultPtr)[SIZE]) {
+    FILE *stream = fopen("result.txt", "r");
     char *res = *resultPtr;
     char buffer[SIZE];
     mpz_t encryptedMessage, decryptedMessage;
@@ -51,6 +54,7 @@ void decrypt(mpz_t d, mpz_t n, char (*resultPtr)[SIZE], FILE *stream) {
     }
 
     mpz_clears(encryptedMessage, decryptedMessage, NULL);
+    fclose(stream);
 }
 
 int main() {
@@ -58,11 +62,10 @@ int main() {
     char message[SIZE], decryptedMessage[SIZE];
     mpz_t p, eulerP, q, eulerQ, n, euler, e, d, i;
     mpz_t messageToInt, encryptedMessage;
-    FILE *encryption = fopen("result.txt", "w"), *decryption = fopen("result.txt", "r");
 
-    printf("Введите степень 2 (от 10 до 16): ");
+    printf("Введите степень 2 (от 10 до 16 (после 13 - медленно)): ");
     scanf("%d", &power);
-    if (power > 16 || power < 10) exit(1);
+    if (power > 16 || power < 10) return 1;
     
     mpz_inits(p, eulerP, q, eulerQ, n, euler, e, d, i, NULL);
     mpz_inits(messageToInt, encryptedMessage, decryptedMessage, NULL);
@@ -97,11 +100,8 @@ int main() {
     printf("\nВведите сообщение: ");
     scanf("%s", message);
 
-    encrypt(e, n, message, encryption);
-    fclose(encryption);
-
-    decrypt(d, n, &decryptedMessage, decryption);
-    fclose(decryption);
+    encrypt(e, n, message);
+    decrypt(d, n, &decryptedMessage);
     
     printf("Расшифрованное сообщение: %s\n", decryptedMessage);
 

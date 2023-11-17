@@ -1,5 +1,5 @@
 CC = gcc
-# CFLAGS = -Werror -Wextra -Wall
+CFLAGS = -Werror -Wextra -Wall
 CRUNFILE = ./app
 
 all: clean
